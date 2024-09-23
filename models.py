@@ -5,6 +5,7 @@ from flask_login import UserMixin
 
 db = SQLAlchemy()
 
+
 class User(db.Model, UserMixin):
     __tablename__ = 'users'
 
@@ -24,6 +25,7 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+
 class Product(db.Model):
     __tablename__ = 'products'
 
@@ -35,6 +37,16 @@ class Product(db.Model):
 
     orders = db.relationship('OrderProduct', back_populates='product', lazy='dynamic')
 
+    def to_json(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'price': str(self.price),
+            'quantity_in_stock': self.quantity_in_stock
+        }
+
+
 class Order(db.Model):
     __tablename__ = 'orders'
 
@@ -45,6 +57,19 @@ class Order(db.Model):
 
     user = db.relationship('User', back_populates='orders')
     products = db.relationship('OrderProduct', back_populates='order', lazy='dynamic')
+
+    @staticmethod
+    def validate_products(product_ids, quantities):
+        products = Product.query.filter(Product.id.in_(product_ids)).all()
+        product_dict = {product.id: product for product in products}
+
+        for product_id, quantity in quantities.items():
+            if product_id not in product_dict:
+                return {'message': f'Product {product_id} not found.'}
+            if product_dict[product_id].quantity_in_stock < quantity:
+                return {'message': f'Insufficient stock for product {product_dict[product_id].name}.'}
+        return None
+
 
 class OrderProduct(db.Model):
     __tablename__ = 'order_products'

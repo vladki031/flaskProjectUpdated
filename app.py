@@ -1,29 +1,21 @@
 from flask import Flask
 from flask_restful import Api
-from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
-from models import db, User, Product, Order, OrderProduct
-from resources.user import UserRegistration, UserLogin
-from resources.product import ProductListAPI, ProductDetailAPI
-from resources.order import OrderCreationAPI, UserOrderListAPI
+from models import db
+from config import Config
+from resources.user import user_blueprint
+from resources.product import product_blueprint
+from resources.order import order_blueprint
 
 app = Flask(__name__)
-api = Api(app)
-
-app.config['SECRET_KEY'] = 'vlad2003'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'vlad2003'
+app.config.from_object(Config)
 
 db.init_app(app)
 jwt = JWTManager(app)
 
-api.add_resource(UserRegistration, '/api/register', methods=['POST'])
-api.add_resource(UserLogin, '/api/login', methods=['POST'])
-api.add_resource(ProductListAPI, '/api/products', methods=['GET'])
-api.add_resource(ProductDetailAPI, '/api/products/<int:id>', methods=['GET'])
-api.add_resource(OrderCreationAPI, '/api/orders', methods=['POST'])
-api.add_resource(UserOrderListAPI, '/api/user/orders', methods=['GET'])
+app.register_blueprint(user_blueprint, url_prefix='/api/users')
+app.register_blueprint(product_blueprint, url_prefix='/api/products')
+app.register_blueprint(order_blueprint, url_prefix='/api/orders')
 
 with app.app_context():
     db.create_all()

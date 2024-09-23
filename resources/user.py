@@ -1,41 +1,62 @@
-from flask_restful import Resource, reqparse
+from flask import Blueprint
+from flask_restful import Api, Resource, reqparse
+from flask_jwt_extended import create_access_token
 from models import User
 from app import db
-from flask_jwt_extended import create_access_token
+from http import HTTPStatus
+import re
+
+user_blueprint = Blueprint('user', __name__)
+api = Api(user_blueprint)
+
+def is_valid_user_data(username, password):
+    if len(username) < 3:
+        return {'message': 'Username must be at least 3 characters long.'}, HTTPStatus.BAD_REQUEST
+    if len(password) < 6:
+        return {'message': 'Password must be at least 6 characters long.'}, HTTPStatus.BAD_REQUEST
+    if not re.match(r'^[a-zA-Z0-9]+$', username):
+        return {'message': 'Username can only contain letters and numbers.'}, HTTPStatus.BAD_REQUEST
+    return None
 
 class UserRegistration(Resource):
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('username', required=True, help='Username is required and cannot be empty.')
-        parser.add_argument('password', required=True, help='Password is required and cannot be empty.')
+        parser.add_argument('username', required=True, help='Username is required.')
+        parser.add_argument('password', required=True, help='Password is required.')
         data = parser.parse_args()
 
-        if len(data['username']) < 3:
-            return {'message': 'Username must be at least 3 characters long.', 'status_code': 400}, 400
-        if len(data['password']) < 6:
-            return {'message': 'Password must be at least 6 characters long.', 'status_code': 400}, 400
+        username = data['username']
+        password = data['password']
 
-        if User.query.filter_by(username=data['username']).first():
-            return {'message': 'Username is already taken. Please choose a different one.', 'status_code': 400}, 400
+        validation_error = is_valid_user_data(username, password)
+        if validation_error:
+            return validation_error
 
-        new_user = User(username=data['username'], password=data['password'])
+        if User.query.filter_by(username=username).first():
+            return {'message': 'Username is already taken.'}, HTTPStatus.BAD_REQUEST
+
+        new_user = User(username=username, password=password)
         db.session.add(new_user)
         db.session.commit()
 
-        return {'message': 'User created successfully!', 'status_code': 201}, 201
-
+        return {'message': 'User created successfully!'}, HTTPStatus.CREATED
 
 class UserLogin(Resource):
     def post(self):
         parser = reqparse.RequestParser()
-        parser.add_argument('username', required=True, help='Username cannot be blank!')
-        parser.add_argument('password', required=True, help='Password cannot be blank!')
+        parser.add_argument('username', required=True)
+        parser.add_argument('password', required=True)
         data = parser.parse_args()
 
-        user = User.query.filter_by(username=data['username']).first()
+        username = data['username']
+        password = data['password']
 
-        if user and user.check_password(data['password']):
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.check_password(password):
             access_token = create_access_token(identity=user.id)
-            return {'access_token': access_token}, 200
-        else:
-            return {'message': 'Invalid credentials'}, 401
+            return {'access_token': access_token}, HTTPStatus.OK
+        return {'message': 'Invalid credentials'}, HTTPStatus.UNAUTHORIZED
+
+api.add_resource(UserRegistration, '/register')
+api.add_resource(UserLogin, '/login')
